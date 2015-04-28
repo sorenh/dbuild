@@ -66,7 +66,9 @@ t = Docker::Image.build(d.render) do |chunk|
 end
 
 Dir.mkdir('build') unless Dir.exist?('build')
-system("dget -u #{ARGV[-1]}")
+Dir.chdir('build') do
+  system("dget -u #{ARGV[-1]}")
+end
 
 unpack_script = 'dpkg-source -x /home/buildd/build/*.dsc /home/buildd/pkgbuild/'
 a = create_container(t.id, 'buildd', unpack_script)
