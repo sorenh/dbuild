@@ -83,7 +83,7 @@ copy_script = 'dcmd cp /home/buildd/*.changes /home/buildd/build/ && \
                chown -R 666 /home/buildd/build'
 d = create_container(c.id, 'root', copy_script)
 
-d.delete
-c.delete
-b.delete
-a.delete
+# d.delete
+# c.delete
+# b.delete
+# a.delete
