@@ -9,5 +9,3 @@ can't run sbuild inside docker.
 ## TODO
 
 * Add handling for local files
-* Add handling for Ubuntu
-* Copy out debs to host machine
