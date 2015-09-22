@@ -1,5 +1,6 @@
 #!/usr/bin/env ruby
 require 'docker'
+require 'fileutils'
 require 'optparse'
 require 'json'
 require 'logger'
@@ -46,44 +47,53 @@ Thread.new do
   Docker::Event.stream { |event| @log.debug event }
 end
 
-t = Docker::Image.build(d.render) do |chunk|
-  begin
-    chunk = JSON.parse(chunk)
-    keys = chunk.keys
-    if keys.include?('stream')
-      puts chunk['stream']
-    elsif keys.include?('error')
-      @log.error chunk['error']
-      @log.error chunk['errorDetail']
-    elsif keys.include?('status')
-      @log.info chunk['status']
-    else
-      fail "Unknown response type in #{chunk}"
-    end
-  rescue => e
-    @log.error(e)
+Dir.mktmpdir do |tmpdir|
+
+  open("#{tmpdir}/Dockerfile", "w") do |dfile|
+    dfile.syswrite(d.render)
   end
+
+  FileUtils.cp %w(pbuilder-satisfydepends pbuilder-satisfydepends-funcs pbuilder-satisfydepends-checkparams), tmpdir
+
+  t = Docker::Image.build_from_dir(tmpdir) do |chunk|
+    begin
+      chunk = JSON.parse(chunk)
+      keys = chunk.keys
+      if keys.include?('stream')
+        puts chunk['stream']
+      elsif keys.include?('error')
+        @log.error chunk['error']
+        @log.error chunk['errorDetail']
+      elsif keys.include?('status')
+        @log.info chunk['status']
+      else
+        fail "Unknown response type in #{chunk}"
+      end
+    rescue => e
+      @log.error(e)
+    end
+  end
+
+  Dir.mkdir('build') unless Dir.exist?('build')
+  Dir.chdir('build') do
+    system("dget -u #{ARGV[-1]}")
+  end
+
+  unpack_script = 'dpkg-source -x /home/buildd/build/*.dsc /home/buildd/pkgbuild/'
+  a = create_container(t.id, 'buildd', unpack_script)
+
+  install_script = 'cd /home/buildd/pkgbuild && /usr/lib/pbuilder/pbuilder-satisfydepends'
+  b = create_container(a.id, 'root', install_script)
+
+  build_script = 'cd /home/buildd/pkgbuild && dpkg-buildpackage'
+  c = create_container(b.id, 'buildd', build_script)
+
+  copy_script = 'dcmd cp /home/buildd/*.changes /home/buildd/build/ && \
+                 chown -R 666 /home/buildd/build'
+  d = create_container(c.id, 'root', copy_script)
+
+  #d.delete
+  #c.delete
+  #b.delete
+  #a.delete
 end
-
-Dir.mkdir('build') unless Dir.exist?('build')
-Dir.chdir('build') do
-  system("dget -u #{ARGV[-1]}")
-end
-
-unpack_script = 'dpkg-source -x /home/buildd/build/*.dsc /home/buildd/pkgbuild/'
-a = create_container(t.id, 'buildd', unpack_script)
-
-install_script = 'cd /home/buildd/pkgbuild && /usr/lib/pbuilder/pbuilder-satisfydepends'
-b = create_container(a.id, 'root', install_script)
-
-build_script = 'cd /home/buildd/pkgbuild && dpkg-buildpackage'
-c = create_container(b.id, 'buildd', build_script)
-
-copy_script = 'dcmd cp /home/buildd/*.changes /home/buildd/build/ && \
-               chown -R 666 /home/buildd/build'
-d = create_container(c.id, 'root', copy_script)
-
-# d.delete
-# c.delete
-# b.delete
-# a.delete
