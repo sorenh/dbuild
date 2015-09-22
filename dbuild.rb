@@ -92,8 +92,8 @@ Dir.mktmpdir do |tmpdir|
                  chown -R 666 /home/buildd/build'
   d = create_container(c.id, 'root', copy_script)
 
-  #d.delete
-  #c.delete
-  #b.delete
-  #a.delete
+  d.delete(:force => true)
+  c.delete(:force => true)
+  b.delete(:force => true)
+  a.delete(:force => true)
 end
